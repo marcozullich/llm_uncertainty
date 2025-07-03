@@ -10,10 +10,10 @@ def get_token_confidence(generation_with_logits: transformers.generation.utils.G
     return per_token_confidence
 
 def token_uncertainty_naive(generation_with_logits: transformers.generation.utils.GenerateDecoderOnlyOutput):
-    return torch.prod(1 - get_token_confidence(generation_with_logits), dim=1)
+    return 1 - torch.prod(get_token_confidence(generation_with_logits))
 
 def token_uncertainty_vanilla(generation_with_logits: transformers.generation.utils.GenerateDecoderOnlyOutput):
-    return (1 - get_token_confidence(generation_with_logits)).mean()
+    return 1 - (get_token_confidence(generation_with_logits)).mean()
 
 def logTokU_epistemic(confidences: torch.Tensor):
     return confidences.shape[1] / (confidences + 1).sum(dim=1)
