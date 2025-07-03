@@ -10,10 +10,10 @@ def get_token_confidence(generation_with_logits: transformers.generation.utils.G
     return per_token_confidence
 
 def token_uncertainty_naive(generation_with_logits: transformers.generation.utils.GenerateDecoderOnlyOutput):
-    return 1 - torch.prod(per_token_confidence)
+    return torch.prod(1 - get_token_confidence(generation_with_logits), dim=1)
 
 def token_uncertainty_vanilla(generation_with_logits: transformers.generation.utils.GenerateDecoderOnlyOutput):
-    return (1 - per_token_confidence).mean()
+    return (1 - get_token_confidence(generation_with_logits)).mean()
 
 def logTokU_epistemic(confidences: torch.Tensor):
     return confidences.shape[1] / (confidences + 1).sum(dim=1)
@@ -30,15 +30,17 @@ def logTokU_aleatoric(confidences: torch.Tensor):
 def logTokU(generation_with_logits: transformers.generation.utils.GenerateDecoderOnlyOutput, top_k_inconfident:int = 5):
     '''
     Implements Logits-Induced Token Uncertainty as in the paper
-    https://arxiv.org/abs/2412.14737
+    https://arxiv.org/abs/2502.00290
     '''
-
     per_token_confidence = get_token_confidence(generation_with_logits, apply_softmax=False, top_k=top_k_inconfident)
+    per_token_confidence = per_token_confidence.relu().cpu()
     epistemic_uncertainty = logTokU_epistemic(per_token_confidence)
     aleatoric_uncertainty = logTokU_aleatoric(per_token_confidence)
-    
+
+    top_k_inconfident = min(top_k_inconfident, per_token_confidence.shape[1])
+
     reliability_scores = - epistemic_uncertainty * aleatoric_uncertainty
-    reliability_total = 1/top_k_inconfident * reliability_scores.topk(k=top_k_inconfident).values.sum()
+    reliability_total = 1/top_k_inconfident * reliability_scores.topk(k=top_k_inconfident, largest=False).values.sum()
 
     return reliability_total
     
